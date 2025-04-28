@@ -3,7 +3,7 @@
     'Neos.Neos:Content': true
     'BetterEmbed.NeosEmbed:Mixin.Item': true
   ui:
-    label: Better Embed
+    label: 'Better Embed'
     icon: plus
     help:
-      message: 'i18n'
+      message: i18n

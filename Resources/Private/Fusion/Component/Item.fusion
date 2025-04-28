@@ -1,7 +1,7 @@
 prototype(BetterEmbed.NeosEmbed:Component.Item) < prototype(Neos.Fusion:Component) {
     recordNode              = ${q(node).property('record')}
 
-    identifier              = ${'embed-form-' + q(node).property('_identifier')}
+    identifier              = ${'embed-form-' + node.aggregateId}
     title                   = ${q(this.recordNode).property('title')}
     url                     = ${q(this.recordNode).property('url')}
     thumbnail               = ${q(this.recordNode).property('thumbnail')}
@@ -18,7 +18,7 @@ prototype(BetterEmbed.NeosEmbed:Component.Item) < prototype(Neos.Fusion:Componen
 
     placeholder = ${Translation.translate('placeholder.message', 'Please set a URL in the inspector panel', [], null, 'BetterEmbed.NeosEmbed')}
 
-    @if.hasRecordOrInBackend = ${this.recordNode || node.context.inBackend}
+    @if.hasRecordOrInBackend = ${this.recordNode || renderingMode.isEdit}
 
     renderer = afx`
         <BetterEmbed.NeosEmbed:Component.Renderer @if.set={props.recordNode} @key='renderer' />
@@ -30,7 +30,7 @@ prototype(BetterEmbed.NeosEmbed:Component.Item) < prototype(Neos.Fusion:Componen
     @cache {
         mode = 'cached'
         entryIdentifier {
-            node = ${node}
+            node = ${Neos.Caching.entryIdentifierForNode(node)}
         }
         entryTags {
             1 = ${Neos.Caching.nodeTag(node)}

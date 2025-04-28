@@ -24,19 +24,13 @@ class FusionRuntimeAspect
     protected $nodeService;
 
     /**
-     * @Flow\Inject
-     * @var ContextFactoryInterface
-     */
-    protected $contextFactory;
-
-    /**
-     * @var Context
+     * @var \Neos\Rector\ContentRepository90\Legacy\LegacyContextStub
      */
     protected $liveContext;
 
     public function initializeObject()
     {
-        $this->liveContext = $this->contextFactory->create(['workspaceName' => 'live']);
+        $this->liveContext = new \Neos\Rector\ContentRepository90\Legacy\LegacyContextStub(['workspaceName' => 'live']);
     }
 
     /**
@@ -48,7 +42,7 @@ class FusionRuntimeAspect
     public function extendContextArrayWithBetterEmbedRootNode(JoinPointInterface $joinPoint)
     {
         $contextArray = $joinPoint->getMethodArgument('contextArray');
-        if (isset($contextArray['node']) && $contextArray['node'] instanceof NodeInterface) {
+        if (isset($contextArray['node']) && $contextArray['node'] instanceof \Neos\ContentRepository\Core\Projection\ContentGraph\Node) {
             $contextArray[BetterEmbedRepository::BETTER_EMBED_ROOT_NODE_NAME] = $this->nodeService->findOrCreateBetterEmbedRootNode($this->liveContext);
             $joinPoint->setMethodArgument('contextArray', $contextArray);
         }

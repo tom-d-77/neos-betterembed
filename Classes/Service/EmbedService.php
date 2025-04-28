@@ -32,27 +32,15 @@ class EmbedService
 {
 
     /**
-     * @var Context
+     * @var \Neos\Rector\ContentRepository90\Legacy\LegacyContextStub
      */
     protected $context;
-
-    /**
-     * @Flow\Inject
-     * @var ContextFactoryInterface
-     */
-    protected $contextFactory;
 
     /**
      * @Flow\Inject
      * @var NodeService
      */
     protected $nodeService;
-
-    /**
-     * @Flow\Inject
-     * @var NodeTypeManager
-     */
-    protected $nodeTypeManager;
 
 
     /**
@@ -78,56 +66,62 @@ class EmbedService
      */
     protected $assetCollections;
 
-    /**
-     * @Flow\Inject
-     * @var NodeSearchService
-     */
-    protected $nodeSearchService;
+    #[\Neos\Flow\Annotations\Inject]
+    protected \Neos\ContentRepositoryRegistry\ContentRepositoryRegistry $contentRepositoryRegistry;
 
 
     public function initializeObject()
     {
-        $this->context = $this->contextFactory->create(['workspaceName' => 'live']);
+        $this->context = new \Neos\Rector\ContentRepository90\Legacy\LegacyContextStub(['workspaceName' => 'live']);
         $this->assetCollections = new ArrayCollection([$this->nodeService->findOrCreateBetterEmbedAssetCollection()]);
     }
 
     /**
-     * @param NodeInterface $node
+     * @param \Neos\ContentRepository\Core\Projection\ContentGraph\Node $node
      * @param Workspace|null $targetWorkspace
      * @throws GuzzleException
      * @throws NodeException
      * @throws NodeTypeNotFoundException
      */
-    public function nodeUpdated(NodeInterface $node): void
+    public function nodeUpdated(\Neos\ContentRepository\Core\Projection\ContentGraph\Node $node): void
     {
-        $this->context = $this->contextFactory->create([
+        // TODO 9.0 migration: Try to remove the toLegacyDimensionArray() call and make your codebase more typesafe.
+
+        $this->context = new \Neos\Rector\ContentRepository90\Legacy\LegacyContextStub([
             'workspaceName' => 'live',
-            'dimensions' => $node->getDimensions()
+            'dimensions' => $node->originDimensionSpacePoint->toLegacyDimensionArray()
         ]);
-        if ($node->getNodeType()->isOfType('BetterEmbed.NeosEmbed:Mixin.Item')) {
+        $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
+        if ($contentRepository->getNodeTypeManager()->getNodeType($node->nodeTypeName)->isOfType('BetterEmbed.NeosEmbed:Mixin.Item')) {
             $url = $node->getProperty('url');
 
             if (!empty($url)) {
                 $recordNode = $this->getByUrl($url, true);
+                // TODO 9.0 migration: !! Node::setProperty() is not supported by the new CR. Use the "SetNodeProperties" command to change property values.
+
                 $node->setProperty('record', $recordNode);
             }
         }
     }
 
     /**
-     * @param NodeInterface $node
+     * @param \Neos\ContentRepository\Core\Projection\ContentGraph\Node $node
      * @param Workspace|null $targetWorkspace
      * @throws GuzzleException
      * @throws NodeException
      * @throws NodeTypeNotFoundException
      */
-    public function nodeRemoved(NodeInterface $node): void
+    public function nodeRemoved(\Neos\ContentRepository\Core\Projection\ContentGraph\Node $node): void
     {
 
-        if ($node->getNodeType()->isOfType('BetterEmbed.NeosEmbed:Mixin.Item')) {
+        $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
+        if ($contentRepository->getNodeTypeManager()->getNodeType($node->nodeTypeName)->isOfType('BetterEmbed.NeosEmbed:Mixin.Item')) {
             $url = $node->getProperty('url');
+            // TODO 9.0 migration: The replacement needs a node as starting point for the search. Please provide a node, to make this replacement working.
+            $node = 'we-need-a-node-here';
+            $subgraph = $this->contentRepositoryRegistry->subgraphForNode($node);
 
-            if (!empty($url) && count($this->nodeSearchService->findByProperties(['url' => str_replace('"', '', json_encode($url))], ['BetterEmbed.NeosEmbed:Mixin.Item'], $this->context)) <= 1) {
+            if (!empty($url) && count($subgraph->findDescendantNodes($node->aggregateId, \Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindDescendantNodesFilter::create(nodeTypes: \Neos\ContentRepository\Core\Projection\ContentGraph\Filter\NodeType\NodeTypeCriteria::create(\Neos\ContentRepository\Core\NodeType\NodeTypeNames::fromStringArray(['BetterEmbed.NeosEmbed:Mixin.Item']), \Neos\ContentRepository\Core\NodeType\NodeTypeNames::createEmpty()), searchTerm: ['url' => str_replace('"', '', json_encode($url))]))) <= 1) {
                 $recordNode = $this->getByUrl($url);
                 if ($recordNode) {
                     $this->nodeService->removeEmbedNode($recordNode);
@@ -139,7 +133,7 @@ class EmbedService
     /**
      * @param string $url
      * @param bool $createIfNotFound
-     * @return NodeInterface|null
+     * @return \Neos\ContentRepository\Core\Projection\ContentGraph\Node|null
      * @throws Exception
      * @throws GuzzleException
      * @throws NodeTypeNotFoundException
@@ -147,7 +141,7 @@ class EmbedService
      */
     public function getByUrl(string $url, $createIfNotFound = false)
     {
-        /** @var NodeInterface $record */
+        /** @var \Neos\ContentRepository\Core\Projection\ContentGraph\Node $record */
         $node = $this->nodeService->findRecordByUrl($this->context->getNode('/' . BetterEmbedRepository::BETTER_EMBED_ROOT_NODE_NAME), $url);
 
         if ($node == null && $createIfNotFound) {
@@ -193,7 +187,7 @@ class EmbedService
 
     /**
      * @param BetterEmbedRecord $record
-     * @return NodeInterface
+     * @return \Neos\ContentRepository\Core\Projection\ContentGraph\Node
      * @throws NodeTypeNotFoundException
      */
     private function createRecordNode(BetterEmbedRecord $record)
@@ -228,13 +222,19 @@ class EmbedService
                 $this->assetRepository->add($image);
             }
         }
+        // TODO 9.0 migration: Make this code aware of multiple Content Repositories.
+        $contentRepository = $this->contentRepositoryRegistry->get(\Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryId::fromString('default'));
 
-        /** @var NodeType $nodeType */
-        $nodeType = $this->nodeTypeManager->getNodeType('BetterEmbed.NeosEmbed:Record');
+        /** @var \Neos\ContentRepository\Core\NodeType\NodeType $nodeType */
+        $nodeType = $contentRepository->getNodeTypeManager()->getNodeType('BetterEmbed.NeosEmbed:Record');
+        // TODO 9.0 migration: !! NodeTemplate is removed in Neos 9.0. Use the "CreateNodeAggregateWithNode" command to create new nodes or "CreateNodeVariant" command to create variants of an existing node in other dimensions.
+
 
         /** @var NodeTemplate $nodeTemplate */
         $nodeTemplate = new NodeTemplate();
         $nodeTemplate->setNodeType($nodeType);
+        // TODO 9.0 migration: !! NodeTemplate::setName is removed in Neos 9.0. Use the "CreateNodeAggregateWithNode" command to create new nodes or "CreateNodeVariant" command to create variants of an existing node in other dimensions.
+
         $nodeTemplate->setName(Algorithms::generateUUID());
         $nodeTemplate->setProperty('url', $record->getUrl());
         $nodeTemplate->setProperty('itemType', $record->getItemType());
@@ -251,7 +251,7 @@ class EmbedService
         $nodeTemplate->setProperty('publishedAt', $record->getPublishedAt());
         $nodeTemplate->setProperty('uriPathSegment', 'embed-' . random_int(0000000000, 9999999999));
 
-        /** @var NodeInterface $node */
+        /** @var \Neos\ContentRepository\Core\Projection\ContentGraph\Node $node */
         $node = $this->nodeService->findOrCreateBetterEmbedRootNode($this->context)->createNodeFromTemplate($nodeTemplate);
 
         return $node;

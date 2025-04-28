@@ -32,36 +32,12 @@ class NodeService
 
     /**
      * @Flow\Inject
-     * @var NodeFactory
-     */
-    protected $nodeFactory;
-
-    /**
-     * @Flow\Inject
      * @var BetterEmbedRepository
      */
     protected $betterEmbedRepository;
 
     /**
-     * @Flow\Inject
-     * @var ContextFactoryInterface
-     */
-    protected $contextFactory;
-
-    /**
-     * @Flow\Inject
-     * @var NodeTypeManager
-     */
-    protected $nodeTypeManager;
-
-    /**
-     * @Flow\Inject
-     * @var NodeDataRepository
-     */
-    protected $nodeDataRepository;
-
-    /**
-     * @var NodeInterface
+     * @var \Neos\ContentRepository\Core\Projection\ContentGraph\Node
      */
     protected $betterEmbedRootNode;
 
@@ -82,16 +58,18 @@ class NodeService
      * @var TagRepository
      */
     protected $tagRepository;
+    #[\Neos\Flow\Annotations\Inject]
+    protected \Neos\ContentRepositoryRegistry\ContentRepositoryRegistry $contentRepositoryRegistry;
 
     /**
-     * @param Context $context
+     * @param \Neos\Rector\ContentRepository90\Legacy\LegacyContextStub $context
      *
-     * @return NodeInterface
+     * @return \Neos\ContentRepository\Core\Projection\ContentGraph\Node
      */
-    public function findOrCreateBetterEmbedRootNode(Context $context)
+    public function findOrCreateBetterEmbedRootNode(\Neos\Rector\ContentRepository90\Legacy\LegacyContextStub $context)
     {
 
-        if ($this->betterEmbedRootNode instanceof NodeInterface) {
+        if ($this->betterEmbedRootNode instanceof \Neos\ContentRepository\Core\Projection\ContentGraph\Node) {
             return $this->betterEmbedRootNode;
         }
 
@@ -102,12 +80,23 @@ class NodeService
 
             return $this->betterEmbedRootNode;
         }
+        // TODO 9.0 migration: !! NodeTemplate is removed in Neos 9.0. Use the "CreateNodeAggregateWithNode" command to create new nodes or "CreateNodeVariant" command to create variants of an existing node in other dimensions.
+
 
         $nodeTemplate = new NodeTemplate();
-        $nodeTemplate->setNodeType($this->nodeTypeManager->getNodeType('unstructured'));
-        $nodeTemplate->setName(BetterEmbedRepository::BETTER_EMBED_ROOT_NODE_NAME);
+        // TODO 9.0 migration: Make this code aware of multiple Content Repositories.
+        $contentRepository = $this->contentRepositoryRegistry->get(\Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryId::fromString('default'));
+        $nodeTemplate->setNodeType($contentRepository->getNodeTypeManager()->getNodeType('unstructured'));
+        // TODO 9.0 migration: !! NodeTemplate::setName is removed in Neos 9.0. Use the "CreateNodeAggregateWithNode" command to create new nodes or "CreateNodeVariant" command to create variants of an existing node in other dimensions.
 
-        $rootNode = $context->getRootNode();
+        $nodeTemplate->setName(BetterEmbedRepository::BETTER_EMBED_ROOT_NODE_NAME);
+        // TODO 9.0 migration: !! MEGA DIRTY CODE! Ensure to rewrite this; by getting rid of LegacyContextStub.
+        $contentRepository = $this->contentRepositoryRegistry->get(\Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryId::fromString('default'));
+        $workspace = $contentRepository->findWorkspaceByName(\Neos\ContentRepository\Core\SharedModel\Workspace\WorkspaceName::fromString($context->workspaceName ?? 'live'));
+        $rootNodeAggregate = $contentRepository->getContentGraph($workspace->workspaceName)->findRootNodeAggregateByType(\Neos\ContentRepository\Core\NodeType\NodeTypeName::fromString('Neos.Neos:Sites'));
+        $subgraph = $contentRepository->getContentGraph($workspace->workspaceName)->getSubgraph(\Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint::fromLegacyDimensionArray($context->dimensions ?? []), $context->invisibleContentShown ? \Neos\ContentRepository\Core\Projection\ContentGraph\VisibilityConstraints::withoutRestrictions() : \Neos\ContentRepository\Core\Projection\ContentGraph\VisibilityConstraints::default());
+
+        $rootNode = $subgraph->findNodeById($rootNodeAggregate->nodeAggregateId);
 
         $this->betterEmbedRootNode = $rootNode->createNodeFromTemplate($nodeTemplate);
         $this->betterEmbedRepository->persistEntities();
@@ -180,12 +169,12 @@ class NodeService
     }
 
     /**
-     * @param NodeInterface $node
+     * @param \Neos\ContentRepository\Core\Projection\ContentGraph\Node $node
      * @param string $url
      * @return \Traversable
      * @throws Exception
      */
-    public function findRecordByUrl(NodeInterface $node, string $url)
+    public function findRecordByUrl(\Neos\ContentRepository\Core\Projection\ContentGraph\Node $node, string $url)
     {
 
         $fq = new FlowQuery([$node]);
@@ -196,9 +185,13 @@ class NodeService
         return $result;
     }
 
-    public function removeEmbedNode(NodeInterface $node)
+    public function removeEmbedNode(\Neos\ContentRepository\Core\Projection\ContentGraph\Node $node)
     {
+        // TODO 9.0 migration: !! Node::setRemoved() is not supported by the new CR. Use the "RemoveNodeAggregate" command to remove a node.
+
         $node->setRemoved(true);
+        // TODO 9.0 migration: !! Node::isRemoved() - the new CR *never* returns removed nodes; so you can simplify your code and just assume removed == FALSE in all scenarios.
+
         if ($node->isRemoved()) {
             $this->nodeDataRepository->remove($node);
             return;

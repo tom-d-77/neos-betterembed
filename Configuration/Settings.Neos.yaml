@@ -4,7 +4,7 @@ Neos:
       groups:
         widget:
           position: 50
-          label: 'Widgets'
+          label: Widgets
     fusion:
       autoInclude:
         BetterEmbed.NeosEmbed: true
@@ -12,5 +12,5 @@ Neos:
       translation:
         autoInclude:
           BetterEmbed.NeosEmbed:
-            - 'Main'
+            - Main
             - 'NodeTypes/*'

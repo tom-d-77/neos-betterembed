@@ -1,12 +1,12 @@
 prototype(Neos.Neos:Page) {
     head.betterEmbedAssets = Neos.Fusion:Component {
         @position = 'end'
-        includeAssets = ${documentNode.context.inBackend || q(documentNode).children('[instanceof Neos.Neos:ContentCollection]').find('[instanceof BetterEmbed.NeosEmbed:Mixin.Include]').is() || q(documentNode).is('[instanceof BetterEmbed.NeosEmbed:Mixin.Include]')}
+        includeAssets = ${renderingMode.isEdit || q(documentNode).children('[instanceof Neos.Neos:ContentCollection]').find('[instanceof BetterEmbed.NeosEmbed:Mixin.Include]').is() || q(documentNode).is('[instanceof BetterEmbed.NeosEmbed:Mixin.Include]')}
         renderer = afx`
             <link @if.set={props.includeAssets} @key='styles' rel='stylesheet' >
                 <Neos.Fusion:ResourceUri @path='attributes.href' path='resource://BetterEmbed.NeosEmbed/Public/Main.css' />
             </link>
-            <link @if.inBackend={node.context.inBackend} @key='backend' rel='stylesheet'>
+            <link @if.inBackend={renderingMode.isEdit} @key='backend' rel='stylesheet'>
                 <Neos.Fusion:ResourceUri @path='attributes.href' path='resource://BetterEmbed.NeosEmbed/Public/Backend.css' />
             </link>
             <script @if.set={props.includeAssets} @key='javscript' type='text/javascript' defer>

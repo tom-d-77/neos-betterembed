@@ -32,10 +32,10 @@
     thumbnail:
       type: Neos\Media\Domain\Model\ImageInterface
       ui:
-        label: 'Thumbnail'
-        reloadIfChanged: TRUE
+        label: Thumbnail
+        reloadIfChanged: true
         inspector:
-          group: 'settings'
+          group: settings
           editorOptions:
             features:
               crop: true

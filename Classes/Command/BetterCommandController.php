@@ -28,9 +28,9 @@ class BetterCommandController extends CommandController
     public function embedCommand(string $url)
     {
 
-        /** @var NodeInterface $node */
+        /** @var \Neos\ContentRepository\Core\Projection\ContentGraph\Node $node */
         $node = $this->embedService->getByUrl($url, true);
 
-        $this->outputLine($node ? json_encode($node->getProperties()) : 'No corresponding node found');
+        $this->outputLine($node ? json_encode($node->properties) : 'No corresponding node found');
     }
 }
