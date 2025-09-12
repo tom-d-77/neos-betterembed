@@ -12,6 +12,9 @@ use Neos\Flow\Aop\JoinPointInterface;
 use Neos\Fusion\Core\Runtime;
 use Neos\Utility\ObjectAccess;
 
+
+
+
 /**
  * @Flow\Aspect
  */
@@ -27,6 +30,9 @@ class FusionRuntimeAspect
      * @var \Neos\Rector\ContentRepository90\Legacy\LegacyContextStub
      */
     protected $liveContext;
+
+    #[\Neos\Flow\Annotations\Inject]
+    protected \Neos\ContentRepositoryRegistry\ContentRepositoryRegistry $contentRepositoryRegistry;
 
     public function initializeObject()
     {

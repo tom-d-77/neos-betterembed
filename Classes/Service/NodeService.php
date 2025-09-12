@@ -2,14 +2,17 @@
 
 namespace BetterEmbed\NeosEmbed\Service;
 
+use BetterEmbed\NeosEmbed\Domain\Repository\BetterEmbedRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Neos\ContentRepository\Core\Feature\NodeRemoval\Command\RemoveNodeAggregate;
 
 
+use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindRootNodeAggregatesFilter;
+use Neos\ContentRepository\Core\Projection\ContentGraph\NodeAggregate;
 use Neos\ContentRepository\Core\SharedModel\Exception\NodeAggregateCurrentlyDoesNotExist;
 use Neos\ContentRepository\Core\SharedModel\Exception\NodeAggregateDoesCurrentlyNotCoverDimensionSpacePoint;
 use Neos\ContentRepository\Core\SharedModel\Node\NodeVariantSelectionStrategy;
-//use Neos\ContentRepository\Domain\Factory\NodeFactory;
+use Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryId;
 use Neos\Eel\Exception;
 use Neos\Eel\FlowQuery\FlowQuery;
 use Neos\Flow\Persistence\Exception\IllegalObjectTypeException;
@@ -27,7 +30,6 @@ class NodeService
 {
 
     const ASSET_COLLECTION_TITLE = 'BetterEmbed';
-
 
     /**
      * @var PersistenceManagerInterface
@@ -49,6 +51,25 @@ class NodeService
 
     #[Flow\Inject]
     protected \Neos\ContentRepositoryRegistry\ContentRepositoryRegistry $contentRepositoryRegistry;
+
+    /**
+     * @param \Neos\Rector\ContentRepository90\Legacy\LegacyContextStub $context
+     *
+     * @return NodeAggregate|null
+     */
+    public function findOrCreateBetterEmbedRootNode()
+    {
+
+        $contentRepository = $this->contentRepositoryRegistry->get(
+            ContentRepositoryId::fromString(BetterEmbedRepository::BETTER_EMBED_ROOT_NODE_NAME)
+        );
+
+        $rootNodeAggregates = $contentRepository->getContentGraph(
+            WorkspaceName::fromString('live'))->findRootNodeAggregates(FindRootNodeAggregatesFilter::create()
+        );
+
+        return $rootNodeAggregates->first();
+    }
 
     /**
      * @param string $title
@@ -133,7 +154,6 @@ class NodeService
 
     public function removeEmbedNode(\Neos\ContentRepository\Core\Projection\ContentGraph\Node $node):void
     {
-        // TODO 9.0 migration: !! Node::setRemoved() is not supported by the new CR. Use the "RemoveNodeAggregate" command to remove a node.
         $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
 
         try {
