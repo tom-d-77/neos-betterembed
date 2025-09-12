@@ -7,7 +7,6 @@ use Neos\ContentRepository\Domain\Service\Context;
 use Neos\ContentRepository\Domain\Service\ContextFactoryInterface;
 use BetterEmbed\NeosEmbed\Domain\Repository\BetterEmbedRepository;
 use BetterEmbed\NeosEmbed\Service\NodeService;
-use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\Flow\Aop\JoinPointInterface;
 use Neos\Fusion\Core\Runtime;
 use Neos\Utility\ObjectAccess;
@@ -26,18 +25,11 @@ class FusionRuntimeAspect
      */
     protected $nodeService;
 
-    /**
-     * @var \Neos\Rector\ContentRepository90\Legacy\LegacyContextStub
-     */
-    protected $liveContext;
-
     #[\Neos\Flow\Annotations\Inject]
     protected \Neos\ContentRepositoryRegistry\ContentRepositoryRegistry $contentRepositoryRegistry;
 
     public function initializeObject()
-    {
-        $this->liveContext = new \Neos\Rector\ContentRepository90\Legacy\LegacyContextStub(['workspaceName' => 'live']);
-    }
+    {}
 
     /**
      * @param JoinPointInterface $joinPoint
@@ -49,7 +41,7 @@ class FusionRuntimeAspect
     {
         $contextArray = $joinPoint->getMethodArgument('contextArray');
         if (isset($contextArray['node']) && $contextArray['node'] instanceof \Neos\ContentRepository\Core\Projection\ContentGraph\Node) {
-            $contextArray[BetterEmbedRepository::BETTER_EMBED_ROOT_NODE_NAME] = $this->nodeService->findOrCreateBetterEmbedRootNode($this->liveContext);
+            $contextArray[BetterEmbedRepository::BETTER_EMBED_ROOT_NODE_NAME] = $this->nodeService->findOrCreateBetterEmbedRootNode();
             $joinPoint->setMethodArgument('contextArray', $contextArray);
         }
     }
@@ -68,7 +60,7 @@ class FusionRuntimeAspect
         $renderingStack = ObjectAccess::getProperty($runtime, 'renderingStack', true);
         $contextArray = array_pop($renderingStack);
 
-        $contextArray[BetterEmbedRepository::BETTER_EMBED_ROOT_NODE_NAME] = $this->nodeService->findOrCreateBetterEmbedRootNode($this->liveContext);
+        $contextArray[BetterEmbedRepository::BETTER_EMBED_ROOT_NODE_NAME] = $this->nodeService->findOrCreateBetterEmbedRootNode();
 
         $renderingStack[] = $contextArray;
         ObjectAccess::setProperty($runtime, 'renderingStack', $renderingStack);

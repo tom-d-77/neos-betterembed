@@ -17,5 +17,5 @@ Neos:
 
   ContentRepositoryRegistry:
     contentRepositories:
-      better-embeds:
+      better_embeds:
         preset: 'default'
