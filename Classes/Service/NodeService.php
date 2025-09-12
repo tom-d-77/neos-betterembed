@@ -7,12 +7,14 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Neos\ContentRepository\Core\Feature\NodeRemoval\Command\RemoveNodeAggregate;
 
 
+use Neos\ContentRepository\Core\Feature\WorkspaceCreation\Command\CreateRootWorkspace;
 use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindRootNodeAggregatesFilter;
 use Neos\ContentRepository\Core\Projection\ContentGraph\NodeAggregate;
 use Neos\ContentRepository\Core\SharedModel\Exception\NodeAggregateCurrentlyDoesNotExist;
 use Neos\ContentRepository\Core\SharedModel\Exception\NodeAggregateDoesCurrentlyNotCoverDimensionSpacePoint;
 use Neos\ContentRepository\Core\SharedModel\Node\NodeVariantSelectionStrategy;
 use Neos\ContentRepository\Core\SharedModel\ContentRepository\ContentRepositoryId;
+use Neos\ContentRepository\Core\SharedModel\Workspace\ContentStreamId;
 use Neos\Eel\Exception;
 use Neos\Eel\FlowQuery\FlowQuery;
 use Neos\Flow\Persistence\Exception\IllegalObjectTypeException;
@@ -24,6 +26,8 @@ use Neos\Media\Domain\Repository\TagRepository;
 use phpDocumentor\Reflection\Types\Boolean;
 use Neos\ContentRepository\Core\SharedModel\Workspace\WorkspaceName;
 use Neos\Flow\Annotations as Flow;
+use Neos\Flow\Security\Context as SecurityContext;
+use Psr\Log\LoggerInterface;
 
 #[Flow\Scope("singleton")]
 class NodeService
@@ -52,23 +56,37 @@ class NodeService
     #[Flow\Inject]
     protected \Neos\ContentRepositoryRegistry\ContentRepositoryRegistry $contentRepositoryRegistry;
 
+    #[Flow\Inject]
+    protected SecurityContext $securityContext;
+
+    #[Flow\Inject]
+    protected LoggerInterface $logger;
+
     /**
-     * @param \Neos\Rector\ContentRepository90\Legacy\LegacyContextStub $context
-     *
      * @return NodeAggregate|null
      */
     public function findOrCreateBetterEmbedRootNode()
     {
+        return $this->securityContext->withoutAuthorizationChecks(function () {
+            $contentRepository = $this->contentRepositoryRegistry->get(
+                ContentRepositoryId::fromString(BetterEmbedRepository::BETTER_EMBED_ROOT_NODE_NAME)
+            );
 
-        $contentRepository = $this->contentRepositoryRegistry->get(
-            ContentRepositoryId::fromString(BetterEmbedRepository::BETTER_EMBED_ROOT_NODE_NAME)
-        );
+            if ($contentRepository->findWorkspaceByName(WorkspaceName::forLive()) === null) {
+                $this->logger->info('No "live" Workspace for ' . BetterEmbedRepository::BETTER_EMBED_ROOT_NODE_NAME);
+                $this->logger->info('Create "live" Workspace for ' . BetterEmbedRepository::BETTER_EMBED_ROOT_NODE_NAME);
+                $contentRepository->handle(CreateRootWorkspace::create(
+                    WorkspaceName::forLive(),
+                    ContentStreamId::create()
+                ));
+            }
 
-        $rootNodeAggregates = $contentRepository->getContentGraph(
-            WorkspaceName::fromString('live'))->findRootNodeAggregates(FindRootNodeAggregatesFilter::create()
-        );
+            $rootNodeAggregates = $contentRepository->getContentGraph(
+                WorkspaceName::fromString('live'))->findRootNodeAggregates(FindRootNodeAggregatesFilter::create()
+            );
 
-        return $rootNodeAggregates->first();
+            return $rootNodeAggregates->first();
+        });
     }
 
     /**
