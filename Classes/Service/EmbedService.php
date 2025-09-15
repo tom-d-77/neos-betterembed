@@ -7,7 +7,7 @@ use GuzzleHttp\Exception\GuzzleException;
 use Neos\ContentRepository\Core\DimensionSpace\DimensionSpacePoint;
 use Neos\ContentRepository\Core\DimensionSpace\OriginDimensionSpacePoint;
 use Neos\ContentRepository\Core\Feature\NodeCreation\Command\CreateNodeAggregateWithNode;
-use Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindRootNodeAggregatesFilter;
+use Neos\ContentRepository\Core\SharedModel\Node\NodeAggregateId;
 use Neos\ContentRepository\Core\SharedModel\Node\NodeName;
 use Neos\ContentRepository\Core\SharedModel\Workspace\WorkspaceName;
 use Neos\ContentRepository\Domain\Model\NodeType;
@@ -16,7 +16,6 @@ use Neos\ContentRepository\Exception\NodeTypeNotFoundException;
 use Neos\Flow\Annotations as Flow;
 use BetterEmbed\NeosEmbed\Domain\Dto\BetterEmbedRecord;
 use Doctrine\Common\Collections\ArrayCollection;
-use Neos\ContentRepository\Domain\Model\NodeInterface;
 use Neos\ContentRepository\Domain\Model\NodeTemplate;
 use Neos\ContentRepository\Domain\Service\Context;
 use Neos\ContentRepository\Domain\Service\ContextFactoryInterface;
@@ -123,21 +122,15 @@ class EmbedService
      */
     public function nodeUpdated(\Neos\ContentRepository\Core\Projection\ContentGraph\Node $node): void
     {
-        // TODO 9.0 migration: Try to remove the toLegacyDimensionArray() call and make your codebase more typesafe.
-
-        // $this->context = new \Neos\Rector\ContentRepository90\Legacy\LegacyContextStub([
-        //    'workspaceName' => 'live',
-        //    'dimensions' => $node->originDimensionSpacePoint->toLegacyDimensionArray()
-        // ]);
-
         $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
+
         if ($contentRepository->getNodeTypeManager()->getNodeType($node->nodeTypeName)->isOfType('BetterEmbed.NeosEmbed:Mixin.Item')) {
             $url = $node->getProperty('url');
 
             if (!empty($url)) {
                 $recordNode = $this->getByUrl($url, $node, true);
-                // TODO 9.0 migration: !! Node::setProperty() is not supported by the new CR. Use the "SetNodeProperties" command to change property values.
 
+                // TODO 9.0 migration: !! Node::setProperty() is not supported by the new CR. Use the "SetNodeProperties" command to change property values.
                 $node->setProperty('record', $recordNode);
             }
         }
@@ -152,12 +145,10 @@ class EmbedService
      */
     public function nodeRemoved(\Neos\ContentRepository\Core\Projection\ContentGraph\Node $node): void
     {
-
         $contentRepository = $this->contentRepositoryRegistry->get($node->contentRepositoryId);
+
         if ($contentRepository->getNodeTypeManager()->getNodeType($node->nodeTypeName)->isOfType('BetterEmbed.NeosEmbed:Mixin.Item')) {
             $url = $node->getProperty('url');
-            // TODO 9.0 migration: The replacement needs a node as starting point for the search. Please provide a node, to make this replacement working.
-            // $node = 'we-need-a-node-here';
             $subgraph = $this->contentRepositoryRegistry->subgraphForNode($node);
 
             if (!empty($url) && count($subgraph->findDescendantNodes($node->aggregateId, \Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindDescendantNodesFilter::create(nodeTypes: \Neos\ContentRepository\Core\Projection\ContentGraph\Filter\NodeType\NodeTypeCriteria::create(\Neos\ContentRepository\Core\NodeType\NodeTypeNames::fromStringArray(['BetterEmbed.NeosEmbed:Mixin.Item']), \Neos\ContentRepository\Core\NodeType\NodeTypeNames::createEmpty()), searchTerm: ['url' => str_replace('"', '', json_encode($url))]))) <= 1) {
@@ -241,7 +232,6 @@ class EmbedService
      */
     private function createRecordNode(BetterEmbedRecord $record)
     {
-
         $assetOriginal = $record->getThumbnailUrl(); //original asset may have get parameters in the url
         $asset = preg_replace('/(^.*\.(jpg|jpeg|png|gif)).*$/', '$1', $assetOriginal); //asset witout get parametes for neos import
         $extension = preg_replace('/^.*\.(jpg|jpeg|png|gif)$/', '$1', $asset); // asset extension
@@ -281,16 +271,20 @@ class EmbedService
         /** @var \Neos\ContentRepository\Core\NodeType\NodeType $nodeType */
         $nodeType = $contentRepository->getNodeTypeManager()->getNodeType('BetterEmbed.NeosEmbed:Record');
 
-        $rootNode = $this->nodeService->findOrCreateBetterEmbedRootNode();
+        $rootAggregateNode = $this->nodeService->findOrCreateBetterEmbedRootNode();
+
+        $uuid = Algorithms::generateUUID();
+
+        $originDimensionSpacePoint = OriginDimensionSpacePoint::fromDimensionSpacePoint(
+            $dimensionSpacePoint = DimensionSpacePoint::fromArray([])
+        );
 
         $nodeCreateCommand = CreateNodeAggregateWithNode::create(
             WorkspaceName::forLive(),
             NodeAggregateId::create(),
             $nodeType->name,
-            OriginDimensionSpacePoint::fromDimensionSpacePoint(
-                $dimensionSpacePoint = DimensionSpacePoint::fromArray([])
-            ),
-            $rootNode->aggregateId
+            $originDimensionSpacePoint,
+            $rootAggregateNode->aggregateId
         )->withInitialPropertyValues(
             PropertyValues::fromArray([
                 'url' => $record->getUrl(),
@@ -308,19 +302,23 @@ class EmbedService
                 'publishedAt' => $record->getPublishedAt(),
                 'uriPathSegment' => 'embed-' . random_int(0, 9999999999),
             ])
-        )->withNodeName(NodeName::fromString(Algorithms::generateUUID()));
+        )->withNodeName(NodeName::fromString($uuid));
 
-        $result = $contentRepository->handle($nodeCreateCommand);
+        $contentRepository->handle($nodeCreateCommand);
 
-        $created = $subgraph->findChildNodes(
-            $rootNode->aggregateId,
-            \Neos\ContentRepository\Core\Projection\ContentGraph\Filter\FindChildNodesFilter::create(
-                $create->nodeName
+        $subgraph = $this->contentRepositoryRegistry->subgraphForNode(
+            $rootAggregateNode->getNodeByOccupiedDimensionSpacePoint($originDimensionSpacePoint),
+            VisibilityConstraints::withoutRestrictions()
+        );
+
+        $createdNode = $subgraph->findChildNodes(
+            $rootAggregateNode->nodeAggregateId,
+            FindChildNodesFilter::create(
+                NodeName::fromString($uuid)
             )
-        )[0] ?? null;
+        );
 
-        return $created;
+        return $createdNode->first();
     }
-
 
 }
